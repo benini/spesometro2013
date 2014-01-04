@@ -1,209 +1,408 @@
-Formato del record:
-Operazione (FE = Fatture Emesse; FR = Fatture Ricevute); numero operazioni; partita_iva o codice_fiscale; imponibile; iva
-<hr>
+<html>
+<head>
 
-<input type="file" id="files" name="files[]"/>
-<output id="res"></output>
+<title>
+Spesometro 2013
+</title>
 
 <script>
-	var soggetti = [];
+/*
+* Copyright (C) 2014 Fulvio Benini
+* This file is free software: you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation.
+
+* This software is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details. ( <http://www.gnu.org/licenses/> )
+*/
+
+var ID_SOFT = "ID_SOFT";
+var anagraf = {};
+var invio = {};
+var soggetti = [];
+
+
+function creaComunicazione() {
+	var n_sog = 0;
+	var n_recC_ = 1;
 	
-	function handleFileSelect(evt) {
-		var reader = new FileReader();
-		reader.onload = function(e) {
-			function isNumeric(num) { return (num >= 0 || num < 0); }
-			
-			function add_record(f) {
-				var piva = String(f[2]);
-				if (soggetti[piva] === undefined) {
-					soggetti[piva] = [];
-					soggetti[piva][0] = {n: 0, imp: 0, iva: 0}; //fatture emesse
-					soggetti[piva][1] = {n: 0, imp: 0, iva: 0}; //note credito emesse
-					soggetti[piva][2] = {n: 0, imp: 0, iva: 0}; //fatture ricevute
-					soggetti[piva][3] = {n: 0, imp: 0, iva: 0}; //note credito ricevute
-				}
-				var idx	= (f[0][1] == "E") ? 0 : 2;
-				if (f[3] < 0) idx++;
-				soggetti[piva][idx].n += parseInt(f[1]);
-				soggetti[piva][idx].imp += parseFloat(f[3]);
-				soggetti[piva][idx].iva += parseFloat(f[4]);
-			}
-		
-			var v = e.target.result.split("\n");
-			for (var i=0; i < v.length; i++) {
-				v[i].trim();
-				if (v[i].substr(0, 2) == "//") continue;
-				var f = v[i].split("\t");
-				var valid_line = true;
-				if (f.length != 5) valid_line = false;
-				else {
-					f[3] = f[3].replace(".","").replace(",",".");
-					f[4] = f[4].replace(".","").replace(",",".");
-					if (f[0] != "FE" && f[0] != "FR") valid_line = false;
-					else if (! isNumeric(f[1])) valid_line = false;
-					else if (f[2].length < 11 || f[2].length > 16) valid_line = false;
-					else if (! isNumeric(f[3])) valid_line = false;
-					else if (! isNumeric(f[4])) valid_line = false;
-				}
-				
-				if (valid_line) add_record(f);
-				else document.getElementById('res').innerHTML += "<br>Errore nella linea: " + (i+1);
-			}
-			
-			
-			
-			function download(filename, text) {
-				var pom = document.createElement('a');
-				pom.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(text));
-				pom.setAttribute('download', filename);
-				pom.click();
-			}
-			download('test.txt', creaComunicazione("CF SOGGETTO"));
-		};
-	
-		reader.readAsText(evt.target.files[0]);
+	function fillerAN(len) {
+		return new Array( len +1 ).join( ' ' );
+	}
+	function formattaAN(str, len) {
+		return str + (new Array( 1 + len - str.length ).join( ' ' ));
+	}
+	function formattaCF(str) {
+		return str + (new Array( 17 - str.length ).join( ' ' ));
+	}
+	function formattaNP(str) {
+		var res = Math.floor(str);
+		if (res == 0) res = 1;
+		res = res.toFixed(0);
+		return (new Array( 17 - res.length ).join( ' ' )) + res;
+	}
+	function formattaNU(str, len) {
+		var res = Math.floor(str).toFixed(0);
+		return (new Array( len + 1 - res.length ).join( '0' )) + res;
 	}
 
-	function creaComunicazione(CF_soggetto) {
-		var n_sog = 0;
-		var n_recC_ = 1;
-	
-		function fillerAN(len) {
-			return new Array( len +1 ).join( ' ' );
-		}		
-		function formattaCF(str) {
-			return str + (new Array( 17 - str.length ).join( ' ' ));
-		}
-		function formattaNP(str) {
-			var res = Math.floor(str);
-			if (res == 0) res = 1;
-			res = res.toFixed(0);
-			return (new Array( 17 - res.length ).join( ' ' )) + res;
-		}
-		function formattaNU(str, len) {
-			var res = Math.floor(str).toFixed(0);
-			return (new Array( len + 1 - res.length ).join( '0' )) + res;
-		}
+	function creaRecordA() {
+		var res = "A";
+		res += fillerAN(14);
+		res += "NSP00";
+		res += "01";
+		res += formattaCF(anagraf.CF_SOG);
+		res += fillerAN(483);
+		res += formattaNU(invio.PROGRESSIVO, 4);
+		res += formattaNU(invio.TOTALE_INVII, 4);
+		res += fillerAN(1368);
+		res += "A\r\n"
+		return res;
+	}
 
-		function creaRecordA(CF_soggetto) {		
-			var res = "A";
-			res += fillerAN(14);
-			res += "NSP00";
-			res += "01";
-			res += formattaCF(CF_soggetto);
-			res += fillerAN(483);
-			res += formattaNU(1, 4);
-			res += formattaNU(1, 4);
-			res += fillerAN(1368);
-			res += "A\r\n"
-			return res;
-		}
+	function creaRecordB() {
+		var res = "B";
+		res += formattaCF(anagraf.CF_SOG);
+		res += formattaNU(1, 8);
+		res += fillerAN(48);
+		res += formattaCF(ID_SOFT);
+		res += "100";
+		res += formattaNU(0, 23);
+		res += "10";
+		res += "100000000000"
+		res += formattaAN(anagraf.PART_IVA, 11);
+		res += formattaAN(anagraf.CODICE_ATTIVITA, 6);
+		res += formattaAN(anagraf.TEL, 12);
+		res += formattaAN(anagraf.FAX, 12);
+		res += formattaAN(anagraf.EMAIL, 50);
+		res += fillerAN(45);
+		res += fillerAN(8);
+		res += fillerAN(42);
+		res += formattaAN(anagraf.DENOMINAZIONE, 60);
+		res += formattaAN(invio.ANNO_RIF, 4);
+		res += fillerAN(2);
+		res += fillerAN(34);
+		res += fillerAN(45);
+		res += fillerAN(8);
+		res += fillerAN(42);
+		res += fillerAN(60);			
+		res += fillerAN(16 + 5 + 1 + 1 + 8); // Dati intermediario
+		res += fillerAN(1258 + 20 + 18);
+		res += "A\r\n"
+		return res;
+	}
 
-		function creaRecordC(CF_soggetto) {
-			function intestazione(progressivo_modulo) {
-				var res = "C";
-				res += formattaCF(CF_soggetto);
-				res += ("       " + progressivo_modulo.toString()).slice(-8);
-				res += new Array( 49 ).join( ' ' );
-				res += formattaCF("ID SOFT");
-				return res;
-			}
-
-			var tmp = [];
-			n_sog = 0;
-			for (sog in soggetti) {		
-				n_sog++;
-				var prefisso = "000" + n_sog.toString();
-				prefisso  = "FA" + prefisso.slice(-3);
-
-				if (sog.length > 11) tmp.push(prefisso + "002");
-				else tmp.push(prefisso + "001");
-				tmp.push(formattaCF(sog));
-				var op_attive = soggetti[sog][0].n + soggetti[sog][3].n;
-				var op_passive = soggetti[sog][1].n + soggetti[sog][2].n;
-				if (op_attive > 0) {
-					tmp.push(prefisso + "004");
-					tmp.push(formattaNP(op_attive.toString()));
-				}
-				if (op_passive > 0) {
-					tmp.push(prefisso + "005");
-					tmp.push(formattaNP(op_passive.toString()));
-				}
-				if (soggetti[sog][0].n > 0) {
-					tmp.push(prefisso + "007");
-					tmp.push(formattaNP(soggetti[sog][0].imp));
-					tmp.push(prefisso + "008");
-					tmp.push(formattaNP(soggetti[sog][0].iva));
-				}
-				if (soggetti[sog][3].n > 0) {
-					tmp.push(prefisso + "010");
-					tmp.push(formattaNP(soggetti[sog][3].imp));
-					tmp.push(prefisso + "011");
-					tmp.push(formattaNP(soggetti[sog][3].iva));
-				}
-				if (soggetti[sog][2].n > 0) {
-					tmp.push(prefisso + "012");
-					tmp.push(formattaNP(soggetti[sog][2].imp));
-					tmp.push(prefisso + "013");
-					tmp.push(formattaNP(soggetti[sog][2].iva));
-				}
-				if (soggetti[sog][1].n > 0) {
-					tmp.push(prefisso + "015");
-					tmp.push(formattaNP(soggetti[sog][1].imp));
-					tmp.push(prefisso + "016");
-					tmp.push(formattaNP(soggetti[sog][1].iva));
-				}
-			}
-		
-			var res = ""
-			n_recC_ = 1;
-			res += intestazione(n_recC_);
-			var n_record = 0;
-			for (var i=0; i < tmp.length; i++) {
-				if (n_record++ == 150) {
-					n_record = 1;				
-					res += "        A\r\n"; //Chiusura del record
-					res += intestazione(++n_recC_);
-				}
-				res += tmp[i];
-			}
-			var spazi_filler = (150 - n_record) * 12;
-			res += new Array( spazi_filler +1 ).join( ' ' );
-			res += "        A\r\n"; //Chiusura del record
-			return res;
-		}
-	
-		function creaRecordE(CF_soggetto) {
-			var res = "E";
-			res += formattaCF(CF_soggetto);
-			res += "       1";
+	function creaRecordC() {
+		function intestazione(progressivo_modulo) {
+			var res = "C";
+			res += formattaCF(anagraf.CF_SOG);
+			res += formattaNU(progressivo_modulo, 8);
 			res += fillerAN(48);
-			res += formattaCF("ID SOFT");
-			res += "TA001001";
-			res += formattaNP(n_sog);
-			res += fillerAN(1776);
-			res += "        A\r\n"; //Chiusura del record
+			res += formattaCF(ID_SOFT);
 			return res;
+		}
+
+		var tmp = [];
+		n_sog = 0;
+		for (sog in soggetti) {		
+			n_sog++;
+			var prefisso = "FA" + ("000" + n_sog).slice(-3);
+			if (sog.length > 11 || sog[0] == '9' || sog[0] == '8') tmp.push(prefisso + "002");
+			else tmp.push(prefisso + "001");
+			tmp.push(formattaCF(sog));
+			var op_attive = soggetti[sog][0].n + soggetti[sog][3].n;
+			var op_passive = soggetti[sog][1].n + soggetti[sog][2].n;
+			if (op_attive > 0) {
+				tmp.push(prefisso + "004");
+				tmp.push(formattaNP(op_attive));
+			}
+			if (op_passive > 0) {
+				tmp.push(prefisso + "005");
+				tmp.push(formattaNP(op_passive));
+			}
+			if (soggetti[sog][0].n > 0) {
+				tmp.push(prefisso + "007");
+				tmp.push(formattaNP(soggetti[sog][0].imp));
+				tmp.push(prefisso + "008");
+				tmp.push(formattaNP(soggetti[sog][0].iva));
+			}
+			if (soggetti[sog][3].n > 0) {
+				tmp.push(prefisso + "010");
+				tmp.push(formattaNP(soggetti[sog][3].imp));
+				tmp.push(prefisso + "011");
+				tmp.push(formattaNP(soggetti[sog][3].iva));
+			}
+			if (soggetti[sog][2].n > 0) {
+				tmp.push(prefisso + "012");
+				tmp.push(formattaNP(soggetti[sog][2].imp));
+				tmp.push(prefisso + "013");
+				tmp.push(formattaNP(soggetti[sog][2].iva));
+			}
+			if (soggetti[sog][1].n > 0) {
+				tmp.push(prefisso + "015");
+				tmp.push(formattaNP(soggetti[sog][1].imp));
+				tmp.push(prefisso + "016");
+				tmp.push(formattaNP(soggetti[sog][1].iva));
+			}
 		}
 		
-		function creaRecordZ() {		
-			var res = "Z";
-			res += fillerAN(14);			
-			res += formattaNU(1, 9);
-			res += formattaNU(n_recC_, 9);
-			res += formattaNU(0, 9);
-			res += formattaNU(1, 9);
-			res += fillerAN(1846);
-			res += "A\r\n"
-			return res;
+		var res = ""
+		n_recC_ = 1;
+		res += intestazione(n_recC_);
+		var n_record = 0;
+		for (var i=0; i < tmp.length; i++) {
+			if (n_record++ == 150) {
+				n_record = 1;				
+				res += "        A\r\n"; //Chiusura del record
+				res += intestazione(++n_recC_);
+			}
+			res += tmp[i];
 		}
-
-		var res = creaRecordA(CF_soggetto);
-		res += creaRecordC(CF_soggetto);
-		res += creaRecordE(CF_soggetto);
-		res += creaRecordZ();
-		return res;	
+		res += fillerAN((150 - n_record) * 12);
+		res += "        A\r\n";
+		return res;
+	}
+	
+	function creaRecordE() {
+		var res = "E";
+		res += formattaCF(anagraf.CF_SOG);
+		res += formattaNU(1, 8);
+		res += fillerAN(48);
+		res += formattaCF(ID_SOFT);
+		res += "TA001001";
+		res += formattaNP(n_sog);
+		res += fillerAN(1776);
+		res += "        A\r\n";
+		return res;
+	}
+		
+	function creaRecordZ() {		
+		var res = "Z";
+		res += fillerAN(14);			
+		res += formattaNU(1, 9);
+		res += formattaNU(n_recC_, 9);
+		res += formattaNU(0, 9);
+		res += formattaNU(1, 9);
+		res += fillerAN(1846);
+		res += "A\r\n"
+		return res;
 	}
 
-	document.getElementById('files').addEventListener('change', handleFileSelect, false);
+	var res = creaRecordA();
+	res += creaRecordB();
+	res += creaRecordC();
+	res += creaRecordE();
+	res += creaRecordZ();
+	return res;	
+}
+
+	
+function inputFile(evt) {
+	var reader = new FileReader();
+	reader.onload = function(e) {
+		function isNumeric(num) { return (num >= 0 || num < 0); }
+			
+		function add_record(f) {
+			var piva = String(f[2]);
+			if (soggetti[piva] === undefined) {
+				soggetti[piva] = [];
+				soggetti[piva][0] = {n: 0, imp: 0, iva: 0}; //fatture emesse
+				soggetti[piva][1] = {n: 0, imp: 0, iva: 0}; //note credito emesse
+				soggetti[piva][2] = {n: 0, imp: 0, iva: 0}; //fatture ricevute
+				soggetti[piva][3] = {n: 0, imp: 0, iva: 0}; //note credito ricevute
+			}
+			var idx	= (f[0][1] == "E") ? 0 : 2;
+			if (f[3] < 0) idx++;
+			soggetti[piva][idx].n += parseInt(f[1]);
+			soggetti[piva][idx].imp += Math.abs(parseFloat(f[3]));
+			soggetti[piva][idx].iva += Math.abs(parseFloat(f[4]));
+		}
+		
+		var errori = [];
+		var v = e.target.result.split("\n");
+		for (var i=0; i < v.length; i++) {
+			v[i].trim();
+			if (v[i].substr(0, 2) == "//") continue;
+			var f = v[i].split("\t");
+			var valid_line = true;
+			if (f.length != 5) {
+				if (f.length == 8 && f[0] === "SOGGETTO") {
+					anagraf.DENOMINAZIONE = f[1].trim();
+					anagraf.PART_IVA = f[2].trim();
+					anagraf.CF_SOG = f[3].trim();
+					anagraf.CODICE_ATTIVITA = f[4].trim();
+					anagraf.TEL = f[5].trim();
+					anagraf.FAX = f[6].trim();
+					anagraf.EMAIL = f[7].trim();
+					continue;
+				}
+				if (f.length == 4 && f[0] === "INVIO") {
+					invio.ANNO_RIF = f[1].trim();
+					invio.PROGRESSIVO = f[2].trim();
+					invio.TOTALE_INVII = f[3].trim();
+					continue;
+				}
+				valid_line = false;					
+			} else {
+				f[3] = f[3].replace(".","").replace(",",".");
+				f[4] = f[4].replace(".","").replace(",",".");
+				if (f[0] != "FE" && f[0] != "FR") valid_line = false;
+				else if (! isNumeric(f[1])) valid_line = false;
+				else if (f[2].length < 11 || f[2].length > 16) valid_line = false;
+				else if (! isNumeric(f[3])) valid_line = false;
+				else if (! isNumeric(f[4])) valid_line = false;
+			}
+				
+			if (valid_line) add_record(f);
+			else errori.push("Errore nella linea: " + (i+1));
+		}
+
+		if (anagraf.DENOMINAZIONE === undefined) errori.push("Errore dati soggetto: Denominazione assente");
+		if (anagraf.PART_IVA === undefined) errori.push("Errore dati soggetto: Partita Iva assente");
+		if (anagraf.CF_SOG === undefined) errori.push("Errore dati soggetto: Codice Fiscale assente");
+		if (anagraf.CODICE_ATTIVITA === undefined) errori.push("Errore dati soggetto: Codice attività ATECO2007 assente");
+		if (anagraf.TEL === undefined) errori.push("Errore dati soggetto: Numero di telefono assente");
+		if (anagraf.FAX === undefined) errori.push("Errore dati soggetto: Numero fax assente");
+		if (anagraf.EMAIL === undefined) errori.push("Errore dati soggetto: E-Mail assente");
+		if (invio.ANNO_RIF === undefined) errori.push("Errore dati comunicazione: Anno di riferimento assente");
+		if (invio.PROGRESSIVO === undefined) errori.push("Errore dati comunicazione: Numero progressivo dell'invio assente");
+		if (invio.TOTALE_INVII === undefined) errori.push("Errore dati comunicazione: Numero totale degli invii assente");
+
+		document.getElementById('importa').style.display="none";
+		document.getElementById('t1').style.color="gray";
+		document.getElementById('t1').onclick = function() { location.reload() };
+		document.getElementById('t2').style.color="black";
+
+		if (errori.length > 0) {
+			document.getElementById('errori').style.display="block";
+			document.getElementById('t2').innerHTML = "Errore";
+			for (var i=0; i < errori.length; i++) document.getElementById('lista_errori').innerHTML += "<br>" + errori[i];
+			return
+		}
+
+		document.getElementById('report').style.display="block";
+
+		var totali = [];
+		totali[0] = {n: 0, imp: 0, iva: 0}; //fatture emesse
+		totali[1] = {n: 0, imp: 0, iva: 0}; //note credito emesse
+		totali[2] = {n: 0, imp: 0, iva: 0}; //fatture ricevute
+		totali[3] = {n: 0, imp: 0, iva: 0}; //note credito ricevute
+		for (sog in soggetti) {
+			for (var i=0; i < 4; i++) {
+				totali[i].n += soggetti[sog][i].n;
+				totali[i].imp += soggetti[sog][i].imp;
+				totali[i].iva += soggetti[sog][i].iva;
+			}
+		}
+		
+		document.getElementById('invio1').innerHTML = invio.ANNO_RIF;
+		document.getElementById('invio2').innerHTML = invio.PROGRESSIVO;
+		document.getElementById('invio3').innerHTML = invio.TOTALE_INVII;
+		document.getElementById('anagraf1').innerHTML = anagraf.DENOMINAZIONE;
+		document.getElementById('anagraf2').innerHTML = anagraf.PART_IVA;
+		document.getElementById('anagraf3').innerHTML = anagraf.CF_SOG;
+		document.getElementById('anagraf4').innerHTML = anagraf.CODICE_ATTIVITA;
+		document.getElementById('anagraf5').innerHTML = anagraf.TEL;
+		document.getElementById('anagraf6').innerHTML = anagraf.FAX;
+		document.getElementById('anagraf7').innerHTML = anagraf.EMAIL;
+		document.getElementById('tot_op_0').innerHTML = "Fatture emesse";
+		document.getElementById('tot_op_1').innerHTML = "Note d'accredito emesse";
+		document.getElementById('tot_op_2').innerHTML = "Fatture ricevute";
+		document.getElementById('tot_op_3').innerHTML = "Note d'accredito ricevute";
+		for (var i=0; i < 4; i++) {
+			document.getElementById('tot_n_' + i).innerHTML = totali[i].n;
+			document.getElementById('tot_imp_' + i).innerHTML = totali[i].imp.toFixed(2).replace(".",",");
+			document.getElementById('tot_iva_' + i).innerHTML = totali[i].iva.toFixed(2).replace(".",",");
+		}
+
+		document.getElementById('crea').setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(creaComunicazione()));
+		document.getElementById('crea').setAttribute('download', "spesometro_" + invio.ANNO_RIF + "_" + invio.PROGRESSIVO);
+	};
+	
+	reader.readAsText(evt.target.files[0]);
+}
+
 </script>
+
+<style media="screen" type="text/css">
+td { padding-right:30px; }
+th { padding-right:30px; }
+</style>
+
+</head>
+<body style="font-family: sans serif, arial, verdana">
+
+<div style="position:fixed; top:0; right:0; font-size:50%"">
+	<div> Copyright (C) 2014 Fulvio Benini - GPL v3.0 License</div>
+</div>
+
+<h1>Spesometro</h1>
+<p>
+Questo software prepara il file contenente i dati del quadro FA (fatture aggregate) della "Comunicazione Polivalente" (Comunicazione delle operazioni rilevanti ai fini IVA, art. 21 decreto legge
+n. 78/2010).
+<p>
+Per inviare il file è necessario utilizzare le applicazioni Entratel o FileInternet dell'
+<a href=http://www.agenziaentrate.gov.it/wps/content/Nsilib/Nsi/Home/CosaDeviFare/ComunicareDati/operazioni+rilevanti+fini+Iva/Compilazione+e+invio/Procedura+spesometro/>
+Agenzia delle Entrate</a>
+<hr style="margin-bottom: 30px">
+
+<span id="t1" style="border:2px solid; border-radius:25px; padding: 6px; font-size:150%">Importa file</span>
+<span id="t2" style="border:2px solid; border-radius:25px; padding: 6px; font-size:150%; color:gray">Crea file</span>
+
+<div id="importa">
+	<p>
+	Il file di input è un file csv (libreoffice, excel) che usa tabulazioni per la separazione delle colonne.
+	<p>
+	Formato:
+	<table>
+	<tr><td>SOGGETO</td><td>ragione_sociale</td><td>partita_iva</td><td>codice_fiscale</td><td>codice_ATECO2007</td><td>numero_telef</td><td>numero_fax</td><td>email</td></tr>
+	<tr><td>INVIO</td><td>anno_di_riferimento</td><td>numero_invio</td><td>totale_invii</td></tr>
+	<tr><td>FE</td><td>numero_operazioni</td><td>part.iva/cod_fiscale</td><td>imponibile</td><td>iva</td></tr>
+	<tr><td>FR</td><td>numero_operazioni</td><td>part.iva/cod_fiscale</td><td>imponibile</td><td>iva</td></tr>
+	</table>
+	<p>
+	Il record SOGGETTO identifica i dati del soggetto a cui si riferisce la comunicazione<br>
+	Il record INVIO identifica i dati relativi all'invio che si sta preparando<br>
+	I record FE sono le fatture emesse: indicare il codice fiscale o partita iva del cliente, utilizzare importi negativi per le note di credito emesse.<br>
+	I record FA sono le fatture ricevute: indicare il codice fiscale o partita iva del fornitore, utilizzare importi negativi per le note di credito ricevute.<br>
+	<p>
+	<input type="file" id="files" name="files[]" onchange="inputFile(event)"/>
+</div>
+
+<div id="report" style="display: none">
+	<p>
+	<div style="font-size:110%; font-weight:bold">
+	Comunicazione n. <span id="invio2"></span>/<span id="invio3"></span> relativa all'anno <span id="invio1"></span>
+	</div>
+	<p>
+	<span id="anagraf1" style="font-size:110%; font-weight:bold"></span><br>
+	<table>
+	<tr><td>Partita Iva:</td><td><span id="anagraf2"></span></td></tr>
+	<tr><td>Codice Fiscale:</td><td><span id="anagraf3"></span></td></tr>
+	<tr><td>Codice ATECO2007:</td><td><span id="anagraf4"></span></td></tr>
+	<tr><td>Telefono:</td><td><span id="anagraf5"></span></td></tr>
+	<tr><td>Fax:</td><td><span id="anagraf6"></span></td></tr>
+	<tr><td>E-Mail:</td><td><span id="anagraf7"></span></td></tr>
+	</table>
+
+	<p>
+	<table style="text-align:right">
+	<tr><th></th><th>N. operazioni</th><th>Tot. Imponibile</th><th>Tot.Iva</th></tr>
+	<tr><td style="text-align:left"><span id="tot_op_0"></span></td><td><span id="tot_n_0"></span></td><td><span id="tot_imp_0"></span></td><td><span id="tot_iva_0"></span></td></tr>
+	<tr><td style="text-align:left"><span id="tot_op_1"></span></td><td><span id="tot_n_1"></span></td><td><span id="tot_imp_1"></span></td><td><span id="tot_iva_1"></span></td></tr>
+	<tr><td style="text-align:left"><span id="tot_op_2"></span></td><td><span id="tot_n_2"></span></td><td><span id="tot_imp_2"></span></td><td><span id="tot_iva_2"></span></td></tr>
+	<tr><td style="text-align:left"><span id="tot_op_3"></span></td><td><span id="tot_n_3"></span></td><td><span id="tot_imp_3"></span></td><td><span id="tot_iva_3"></span></td></tr>
+	</table>
+
+	<p>
+	<span style="border: 1px outset; padding: 6px"><a id="crea">Crea file</a></span>
+</div>
+
+<div id="errori" style="display: none">
+<div id="lista_errori"></div>
+</div>
+
+</body>
+</html>
