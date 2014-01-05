@@ -1,3 +1,4 @@
+<!DOCTYPE html> 
 <html>
 <head>
 
@@ -224,6 +225,7 @@ function inputFile(evt) {
 		var v = e.target.result.split("\n");
 		for (var i=0; i < v.length; i++) {
 			v[i].trim();
+			if (v[i].length == 0) continue;
 			if (v[i].substr(0, 2) == "//") continue;
 			var f = v[i].split("\t");
 			var valid_line = true;
@@ -318,7 +320,7 @@ function inputFile(evt) {
 		}
 
 		document.getElementById('crea').setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(creaComunicazione()));
-		document.getElementById('crea').setAttribute('download', "spesometro_" + invio.ANNO_RIF + "_" + invio.PROGRESSIVO);
+		document.getElementById('crea').setAttribute('download', "spesometro_" + invio.ANNO_RIF + "_" + invio.PROGRESSIVO + ".txt");
 	};
 	
 	reader.readAsText(evt.target.files[0]);
