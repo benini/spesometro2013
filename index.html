@@ -19,9 +19,10 @@ Spesometro 2013
 * GNU General Public License for more details. ( <http://www.gnu.org/licenses/> )
 */
 
-var ID_SOFT = "ID_SOFT";
+var ID_SOFT = "";
 var anagraf = {};
 var invio = {};
+var intermediario = {CF: "", ALBO_CAF: 0, DATA_IMPEGNO: 0, CREATA_DA: 0};
 var soggetti = [];
 
 
@@ -36,6 +37,7 @@ function creaComunicazione() {
 		return str + (new Array( 1 + len - str.length ).join( ' ' ));
 	}
 	function formattaCF(str) {
+		if (str === "RIEPILOGATIVO") return "               1";
 		return str + (new Array( 17 - str.length ).join( ' ' ));
 	}
 	function formattaNP(str) {
@@ -53,11 +55,16 @@ function creaComunicazione() {
 		var res = "A";
 		res += fillerAN(14);
 		res += "NSP00";
-		res += "01";
-		res += formattaCF(anagraf.CF_SOG);
+		if (intermediario.CF.length == 0) {
+			res += "01";
+			res += formattaCF(anagraf.CF_SOG);
+		} else {
+			res += "10";
+			res += formattaCF(intermediario.CF);
+		}
 		res += fillerAN(483);
-		res += formattaNU(invio.PROGRESSIVO, 4);
-		res += formattaNU(invio.TOTALE_INVII, 4);
+		res += formattaNU(0, 4);
+		res += formattaNU(0, 4);
 		res += fillerAN(1368);
 		res += "A\r\n"
 		return res;
@@ -72,24 +79,31 @@ function creaComunicazione() {
 		res += "100";
 		res += formattaNU(0, 23);
 		res += "10";
-		res += "100000000000"
+		res += "100000000001"
 		res += formattaAN(anagraf.PART_IVA, 11);
 		res += formattaAN(anagraf.CODICE_ATTIVITA, 6);
 		res += formattaAN(anagraf.TEL, 12);
 		res += formattaAN(anagraf.FAX, 12);
 		res += formattaAN(anagraf.EMAIL, 50);
 		res += fillerAN(45);
-		res += fillerAN(8);
+		res += formattaNU(0,8);
 		res += fillerAN(42);
 		res += formattaAN(anagraf.DENOMINAZIONE, 60);
 		res += formattaAN(invio.ANNO_RIF, 4);
 		res += fillerAN(2);
-		res += fillerAN(34);
+		res += fillerAN(16);
+		res += formattaNU(0,18);		
 		res += fillerAN(45);
-		res += fillerAN(8);
+		res += formattaNU(0,8);
 		res += fillerAN(42);
-		res += fillerAN(60);			
-		res += fillerAN(16 + 5 + 1 + 1 + 8); // Dati intermediario
+		res += fillerAN(60);
+		// Dati intermediario
+		res += formattaCF(intermediario.CF);
+		res += formattaNU(intermediario.ALBO_CAF,5);
+		res += formattaNU(intermediario.CREATA_DA,1);
+		res += " ";
+		res += formattaNU(intermediario.DATA_IMPEGNO,8);
+		//
 		res += fillerAN(1258 + 20 + 18);
 		res += "A\r\n"
 		return res;
@@ -106,11 +120,13 @@ function creaComunicazione() {
 		}
 
 		var tmp = [];
+		var res = ""
+		n_recC_ = 0;
 		n_sog = 0;
-		for (sog in soggetti) {		
-			n_sog++;
-			var prefisso = "FA" + ("000" + n_sog).slice(-3);
-			if (sog.length > 11 || sog[0] == '9' || sog[0] == '8') tmp.push(prefisso + "002");
+		for (sog in soggetti) {
+			var prefisso = "FA00" + (1 + (n_sog++ % 3));
+			if (sog === "RIEPILOGATIVO") tmp.push(prefisso + "003")
+			else if (sog.length > 11 || sog[0] == '9' || sog[0] == '8') tmp.push(prefisso + "002");
 			else tmp.push(prefisso + "001");
 			tmp.push(formattaCF(sog));
 			var op_attive = soggetti[sog][0].n + soggetti[sog][3].n;
@@ -150,10 +166,17 @@ function creaComunicazione() {
 		}
 		
 		var res = ""
-		n_recC_ = 1;
-		res += intestazione(n_recC_);
+		n_recC_ = 0;
 		var n_record = 0;
 		for (var i=0; i < tmp.length; i++) {
+			if (tmp[i] === "FA001001" || tmp[i] === "FA001002" || tmp[i] === "FA001003") {
+				if (n_record != 0) {
+					res += fillerAN((150 - n_record) * 12);
+					res += "        A\r\n"; //Chiusura del record
+				}
+				n_record = 0;
+				res += intestazione(++n_recC_);
+			}
 			if (n_record++ == 150) {
 				n_record = 1;				
 				res += "        A\r\n"; //Chiusura del record
@@ -181,7 +204,7 @@ function creaComunicazione() {
 		
 	function creaRecordZ() {		
 		var res = "Z";
-		res += fillerAN(14);			
+		res += fillerAN(14);
 		res += formattaNU(1, 9);
 		res += formattaNU(n_recC_, 9);
 		res += formattaNU(0, 9);
@@ -229,23 +252,29 @@ function inputFile(evt) {
 			if (v[i].substr(0, 2) == "//") continue;
 			var f = v[i].split("\t");
 			var valid_line = true;
+			if (f.length == 8 && f[0] === "SOGGETTO") {
+				anagraf.DENOMINAZIONE = f[1].trim();
+				anagraf.PART_IVA = f[2].trim();
+				anagraf.CF_SOG = f[3].trim();
+				anagraf.CODICE_ATTIVITA = f[4].trim();
+				anagraf.TEL = f[5].trim();
+				anagraf.FAX = f[6].trim();
+				anagraf.EMAIL = f[7].trim();
+				continue;
+			}
+			if (f.length == 2 && f[0] === "INVIO") {
+				invio.ANNO_RIF = f[1].trim();
+				continue;
+			}
+			if (f.length == 5 && f[0] === "INTERMEDIARIO") {
+				intermediario.CF = f[1].trim();
+				intermediario.ALBO_CAF = f[2].trim();
+				intermediario.DATA_IMPEGNO = f[3].trim();
+				intermediario.CREATA_DA = f[4].trim();
+				continue;
+			}
+				
 			if (f.length != 5) {
-				if (f.length == 8 && f[0] === "SOGGETTO") {
-					anagraf.DENOMINAZIONE = f[1].trim();
-					anagraf.PART_IVA = f[2].trim();
-					anagraf.CF_SOG = f[3].trim();
-					anagraf.CODICE_ATTIVITA = f[4].trim();
-					anagraf.TEL = f[5].trim();
-					anagraf.FAX = f[6].trim();
-					anagraf.EMAIL = f[7].trim();
-					continue;
-				}
-				if (f.length == 4 && f[0] === "INVIO") {
-					invio.ANNO_RIF = f[1].trim();
-					invio.PROGRESSIVO = f[2].trim();
-					invio.TOTALE_INVII = f[3].trim();
-					continue;
-				}
 				valid_line = false;					
 			} else {
 				f[3] = f[3].replace(".","").replace(",",".");
@@ -260,7 +289,7 @@ function inputFile(evt) {
 			if (valid_line) add_record(f);
 			else errori.push("Errore nella linea: " + (i+1));
 		}
-
+		
 		if (anagraf.DENOMINAZIONE === undefined) errori.push("Errore dati soggetto: Denominazione assente");
 		if (anagraf.PART_IVA === undefined) errori.push("Errore dati soggetto: Partita Iva assente");
 		if (anagraf.CF_SOG === undefined) errori.push("Errore dati soggetto: Codice Fiscale assente");
@@ -269,8 +298,6 @@ function inputFile(evt) {
 		if (anagraf.FAX === undefined) errori.push("Errore dati soggetto: Numero fax assente");
 		if (anagraf.EMAIL === undefined) errori.push("Errore dati soggetto: E-Mail assente");
 		if (invio.ANNO_RIF === undefined) errori.push("Errore dati comunicazione: Anno di riferimento assente");
-		if (invio.PROGRESSIVO === undefined) errori.push("Errore dati comunicazione: Numero progressivo dell'invio assente");
-		if (invio.TOTALE_INVII === undefined) errori.push("Errore dati comunicazione: Numero totale degli invii assente");
 
 		document.getElementById('importa').style.display="none";
 		document.getElementById('t1').style.color="gray";
@@ -283,6 +310,8 @@ function inputFile(evt) {
 			for (var i=0; i < errori.length; i++) document.getElementById('lista_errori').innerHTML += "<br>" + errori[i];
 			return
 		}
+
+		if (ID_SOFT === "") ID_SOFT = anagraf.CF_SOG;
 
 		document.getElementById('report').style.display="block";
 
@@ -300,8 +329,6 @@ function inputFile(evt) {
 		}
 		
 		document.getElementById('invio1').innerHTML = invio.ANNO_RIF;
-		document.getElementById('invio2').innerHTML = invio.PROGRESSIVO;
-		document.getElementById('invio3').innerHTML = invio.TOTALE_INVII;
 		document.getElementById('anagraf1').innerHTML = anagraf.DENOMINAZIONE;
 		document.getElementById('anagraf2').innerHTML = anagraf.PART_IVA;
 		document.getElementById('anagraf3').innerHTML = anagraf.CF_SOG;
@@ -309,6 +336,18 @@ function inputFile(evt) {
 		document.getElementById('anagraf5').innerHTML = anagraf.TEL;
 		document.getElementById('anagraf6').innerHTML = anagraf.FAX;
 		document.getElementById('anagraf7').innerHTML = anagraf.EMAIL;
+		
+		if (intermediario.CF.length > 0) {
+			document.getElementById('intermediario').style.display="block";
+			document.getElementById('intermediario1').innerHTML = intermediario.CF;
+			document.getElementById('intermediario2').innerHTML = intermediario.ALBO_CAF;
+			document.getElementById('intermediario3').innerHTML = intermediario.DATA_IMPEGNO.slice(0,2) + "/" + intermediario.DATA_IMPEGNO.slice(2,4) + "/" + intermediario.DATA_IMPEGNO.slice(4);
+			var creata_da = intermediario.CREATA_DA;
+			if (creata_da == "1") creata_da = "Soggetto obbligato (1)"
+			else if (creata_da == "2") creata_da = "Intermediario (2)"
+			document.getElementById('intermediario4').innerHTML = creata_da;
+		}
+		
 		document.getElementById('tot_op_0').innerHTML = "Fatture emesse";
 		document.getElementById('tot_op_1').innerHTML = "Note d'accredito emesse";
 		document.getElementById('tot_op_2').innerHTML = "Fatture ricevute";
@@ -320,7 +359,7 @@ function inputFile(evt) {
 		}
 
 		document.getElementById('crea').setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(creaComunicazione()));
-		document.getElementById('crea').setAttribute('download', "spesometro_" + invio.ANNO_RIF + "_" + invio.PROGRESSIVO + ".txt");
+		document.getElementById('crea').setAttribute('download', "spesometro_" + invio.ANNO_RIF + ".txt");
 	};
 	
 	reader.readAsText(evt.target.files[0]);
@@ -345,7 +384,7 @@ th { padding-right:30px; }
 Questo software prepara il file contenente i dati del quadro FA (fatture aggregate) della "Comunicazione Polivalente" (Comunicazione delle operazioni rilevanti ai fini IVA, art. 21 decreto legge
 n. 78/2010).
 <p>
-Per inviare il file è necessario utilizzare le applicazioni Entratel o FileInternet dell'
+Per inviare il file e' necessario utilizzare le applicazioni Entratel o FileInternet dell'
 <a href=http://www.agenziaentrate.gov.it/wps/content/Nsilib/Nsi/Home/CosaDeviFare/ComunicareDati/operazioni+rilevanti+fini+Iva/Compilazione+e+invio/Procedura+spesometro/>
 Agenzia delle Entrate</a>
 <hr style="margin-bottom: 30px">
@@ -355,18 +394,20 @@ Agenzia delle Entrate</a>
 
 <div id="importa">
 	<p>
-	Il file di input è un file csv (libreoffice, excel) che usa tabulazioni per la separazione delle colonne.
+	Il file di input e' un file csv (libreoffice, excel) che usa tabulazioni per la separazione delle colonne.
 	<p>
 	Formato:
 	<table>
 	<tr><td>SOGGETO</td><td>ragione_sociale</td><td>partita_iva</td><td>codice_fiscale</td><td>codice_ATECO2007</td><td>numero_telef</td><td>numero_fax</td><td>email</td></tr>
-	<tr><td>INVIO</td><td>anno_di_riferimento</td><td>numero_invio</td><td>totale_invii</td></tr>
-	<tr><td>FE</td><td>numero_operazioni</td><td>part.iva/cod_fiscale</td><td>imponibile</td><td>iva</td></tr>
-	<tr><td>FR</td><td>numero_operazioni</td><td>part.iva/cod_fiscale</td><td>imponibile</td><td>iva</td></tr>
+	<tr><td>INVIO</td><td>anno_di_riferimento</td></tr>
+	<tr><td>INTERMEDIARIO</td><td>codice fiscale</td><td>n. iscrizione albo CAF</td><td>data impegno (formato GGMMAAAA)</td><td>predisposta da (1: soggetto - 2: intermediario)</td>
+	<tr><td>FE</td><td>numero_operazioni</td><td>part.iva / cod_fiscale / RIEPILOGATIVO</td><td>imponibile</td><td>iva</td></tr>
+	<tr><td>FR</td><td>numero_operazioni</td><td>part.iva / cod_fiscale / RIEPILOGATIVO</td><td>imponibile</td><td>iva</td></tr>
 	</table>
 	<p>
 	Il record SOGGETTO identifica i dati del soggetto a cui si riferisce la comunicazione<br>
 	Il record INVIO identifica i dati relativi all'invio che si sta preparando<br>
+	Il record INTERMEDIARIO (opzionale) identifica i dati relativi all'intermediario che spedira' l'invio<br>
 	I record FE sono le fatture emesse: indicare il codice fiscale o partita iva del cliente, utilizzare importi negativi per le note di credito emesse.<br>
 	I record FA sono le fatture ricevute: indicare il codice fiscale o partita iva del fornitore, utilizzare importi negativi per le note di credito ricevute.<br>
 	<p>
@@ -376,7 +417,7 @@ Agenzia delle Entrate</a>
 <div id="report" style="display: none">
 	<p>
 	<div style="font-size:110%; font-weight:bold">
-	Comunicazione n. <span id="invio2"></span>/<span id="invio3"></span> relativa all'anno <span id="invio1"></span>
+	Comunicazione relativa all'anno <span id="invio1"></span>
 	</div>
 	<p>
 	<span id="anagraf1" style="font-size:110%; font-weight:bold"></span><br>
@@ -388,6 +429,17 @@ Agenzia delle Entrate</a>
 	<tr><td>Fax:</td><td><span id="anagraf6"></span></td></tr>
 	<tr><td>E-Mail:</td><td><span id="anagraf7"></span></td></tr>
 	</table>
+	
+	<div id="intermediario" style="display: none">
+	<p>
+	<span style="font-size:110%; font-weight:bold">Intermediario</span><br>
+	<table>
+	<tr><td>Codice Fiscale:</td><td><span id="intermediario1"></span></td></tr>
+	<tr><td>Numero iscrizione albo C.A.F.:</td><td><span id="intermediario2"></span></td></tr>
+	<tr><td>Data dell'impegno:</td><td><span id="intermediario3"></span></td></tr>
+	<tr><td>Comunicazione predisposta da:</td><td><span id="intermediario4"></span></td></tr>
+	</table>
+	</div>
 
 	<p>
 	<table style="text-align:right">
