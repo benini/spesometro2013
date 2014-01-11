@@ -293,7 +293,7 @@ function inputFile(evt) {
 		if (anagraf.DENOMINAZIONE === undefined) errori.push("Errore dati soggetto: Denominazione assente");
 		if (anagraf.PART_IVA === undefined) errori.push("Errore dati soggetto: Partita Iva assente");
 		if (anagraf.CF_SOG === undefined) errori.push("Errore dati soggetto: Codice Fiscale assente");
-		if (anagraf.CODICE_ATTIVITA === undefined) errori.push("Errore dati soggetto: Codice attività ATECO2007 assente");
+		if (anagraf.CODICE_ATTIVITA === undefined) errori.push("Errore dati soggetto: Codice attivita' ATECO2007 assente");
 		if (anagraf.TEL === undefined) errori.push("Errore dati soggetto: Numero di telefono assente");
 		if (anagraf.FAX === undefined) errori.push("Errore dati soggetto: Numero fax assente");
 		if (anagraf.EMAIL === undefined) errori.push("Errore dati soggetto: E-Mail assente");
@@ -359,7 +359,7 @@ function inputFile(evt) {
 		}
 
 		document.getElementById('crea').setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(creaComunicazione()));
-		document.getElementById('crea').setAttribute('download', "spesometro_" + invio.ANNO_RIF + ".txt");
+		document.getElementById('crea').setAttribute('download', "spesometro_" + invio.ANNO_RIF + ".nsp");
 	};
 	
 	reader.readAsText(evt.target.files[0]);
@@ -400,7 +400,7 @@ Agenzia delle Entrate</a>
 	<table>
 	<tr><td>SOGGETO</td><td>ragione_sociale</td><td>partita_iva</td><td>codice_fiscale</td><td>codice_ATECO2007</td><td>numero_telef</td><td>numero_fax</td><td>email</td></tr>
 	<tr><td>INVIO</td><td>anno_di_riferimento</td></tr>
-	<tr><td>INTERMEDIARIO</td><td>codice fiscale</td><td>n. iscrizione albo CAF</td><td>data impegno (formato GGMMAAAA)</td><td>predisposta da (1: soggetto - 2: intermediario)</td>
+	<tr><td>INTERMEDIARIO</td><td>codice_fiscale</td><td>n._iscrizione_albo_CAF</td><td>data_impegno (formato_GGMMAAAA)</td><td>predisposta_da (1=soggetto 2=intermediario)</td>
 	<tr><td>FE</td><td>numero_operazioni</td><td>part.iva / cod_fiscale / RIEPILOGATIVO</td><td>imponibile</td><td>iva</td></tr>
 	<tr><td>FR</td><td>numero_operazioni</td><td>part.iva / cod_fiscale / RIEPILOGATIVO</td><td>imponibile</td><td>iva</td></tr>
 	</table>
